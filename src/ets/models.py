@@ -212,8 +212,16 @@ class Warehouse(models.Model):
     @classmethod
     def get_active_warehouses(cls):
         """Returns active warehouses"""
-        return cls.objects.filter(start_date__lte=date.today).filter(valid_warehouse=True)\
-                      .filter(models.Q(end_date__gt=date.today) | models.Q(end_date__isnull=True))
+        return cls.objects.filter(valid_warehouse=True).filter(compas__in=Compas.objects.all()).filter(start_date__lte=date.today).filter(end_date__isnull=True)
+
+    @classmethod
+    def get_active_warehouses_with_stock(cls):
+        """Returns active warehouses"""
+        whws = StockItem.objects.filter(number_of_units__gt =0).values_list('warehouse').order_by('warehouse').distinct('warehouse')
+        wh = cls.objects.filter(valid_warehouse=True).filter(compas__in=Compas.objects.all()).filter(start_date__lte=date.today).filter(end_date__isnull=True).filter(code__in=whws)
+        
+        return wh
+
 
     @classmethod
     def get_warehouses(cls, location, organization=None):
@@ -250,8 +258,8 @@ class Person(User):
         - **organization** -- foreign key to related organization
         - **location**
         - **warehouses** -- many-to-many relation to warehouses
-        - **dispatch** -- can person to dispatch waybills
-        - **receive** -- can person to receive waybills
+        - **dispatch** -- can person dispatch waybills
+        - **receive** -- can person receive waybills
         - **updated** -- update date
     """
     
@@ -696,6 +704,7 @@ class Waybill( ld_models.Model ):
         - **end_discharge_date** --date of discharging end
         - **distance** -- distance covered in km
         - **transport_dispach_signed_date** -- date of confirmation of dispatch
+        - **receipt_warehouse** -- receipt warehouse
         - **receipt_signed_date** -- date of confirmation of receipt
         - **validated** -- validation of dispatch eWaybill
         - **sent_compas** -- date of sending dispatch eWaybill to Compas
@@ -745,7 +754,7 @@ class Waybill( ld_models.Model ):
     order = models.ForeignKey(Order, verbose_name=_("Order"), related_name="waybills")
     
     destination = models.ForeignKey(Warehouse, verbose_name=_("Destination Warehouse"), blank=True, null=True, related_name="receipt_waybills")
-    
+    receipt_warehouse = models.ForeignKey(Warehouse, verbose_name=_("Receiving Warehouse"), blank=True, null=True, related_name="receipt_waybills2")
     #Dates
     loading_date = models.DateField(_("Loading Date"), default=datetime.now, db_index=True) #dateOfLoading
     dispatch_date = models.DateField( _("Dispatch Date"), default=datetime.now, db_index=True) #dateOfDispatch
@@ -830,6 +839,9 @@ class Waybill( ld_models.Model ):
             self.barcode.save("%s.gif" % self.pk, self.barcode_qr(), save=False)
             super(Waybill, self).save(force_insert=force_insert, force_update=force_update, using=using)
 
+    def regenerate_bc(self):
+            self.barcode.save("%s.gif" % self.pk, self.barcode_qr(), save=False)
+        
     def clean(self):
         """Validates Waybill instance. Checks different dates"""
         if self.loading_date > self.dispatch_date:
@@ -854,7 +866,7 @@ class Waybill( ld_models.Model ):
             raise ValidationError(_("Cargo finished Discharge before Starting?"))
 
         if self.transaction_type not in [self.DELIVERY, self.DISTIBRUTION] and not self.destination:
-            raise ValidationError(_("Chose Destination Warehouse or another Transaction Type"))
+            raise ValidationError(_("Choose Destination Warehouse or another Transaction Type"))
     
     def dispatch_sign(self):
         """Signs the waybill as ready to be sent."""
@@ -871,14 +883,14 @@ class Waybill( ld_models.Model ):
             #Create virtual stock item
             for item in self.loading_details.all():
                 filters = {
-                    'warehouse': self.destination,
+                    'warehouse': self.receipt_warehouse,
                     'project_number': item.stock_item.project_number,
                     'si_code': item.stock_item.si_code, 
                     'commodity': item.stock_item.commodity,
                 }
                 if not StockItem.objects.filter(**filters).exists():
                     filters.update({
-                        'external_ident': "%s%s" % (self.destination, item.stock_item.pk),
+                        'external_ident': "%s%s" % (self.receipt_warehouse, item.stock_item.pk),
                         'quality': item.stock_item.quality,
                         'package': item.stock_item.package,
                         'number_of_units': item.number_of_units,
@@ -941,6 +953,11 @@ class Waybill( ld_models.Model ):
                 self.destination, self.destination.location,
                 self.destination.organization, self.destination.compas,
             ))
+        if self.receipt_warehouse:
+            objects.update((
+                self.receipt_warehouse, self.receipt_warehouse.location,
+                self.receipt_warehouse.organization, self.receipt_warehouse.compas,
+            ))
         
         #Loading details
         for ld in self.loading_details.select_related():
@@ -982,8 +999,8 @@ class Waybill( ld_models.Model ):
         file_out = cStringIO.StringIO()
         
         image = pyqrcode.MakeQRImage(self.compress(), minTypeNumber=40,
-                                     errorCorrectLevel=pyqrcode.QRErrorCorrectLevel.L
-                                     ).resize((445, 445))
+                                     errorCorrectLevel=pyqrcode.QRErrorCorrectLevel.L,
+                                      block_in_pixels=1)
         image.save(file_out, 'GIF')
         file_out.reset()
         
@@ -1018,6 +1035,12 @@ class Waybill( ld_models.Model ):
     
     def has_dispatch_permission(self, user):
         return (not hasattr(user, 'person') or user.person.dispatch) and Waybill.dispatches(user).filter(pk=self.pk).exists()
+
+    def has_delete_permission(self, user):
+        is_dispatcher = self.dispatcher_person.username == user.username
+        is_compas_here = self.order.warehouse.compas.officers.filter(username=user).exists()
+        can_delete = is_dispatcher or is_compas_here
+        return (not hasattr(user, 'person') or can_delete) and Waybill.dispatches(user).filter(pk=self.pk).exists()
     
 
 class LoadingDetail(models.Model):
@@ -1069,6 +1092,18 @@ class LoadingDetail(models.Model):
     number_units_damaged = models.DecimalField(_("Units (Damaged)"), default=0, 
                                                max_digits=12, decimal_places=3 ) #numberUnitsDamaged
     
+    #Net Delivered items
+    received_net_lost = models.DecimalField(_("Net (Lost)"), default=0, 
+                                            max_digits=12, decimal_places=3 ) #numberUnitsLost
+    received_net_damaged = models.DecimalField(_("Net (Damaged)"), default=0, 
+                                               max_digits=12, decimal_places=3 ) #numberUnitsDamaged
+
+    #Gross Delivered items
+    received_gross_lost = models.DecimalField(_("Gross (Lost)"), default=0, 
+                                         max_digits=12, decimal_places=3 ) #numberUnitsLost
+    received_gross_damaged = models.DecimalField(_("Gross (Damaged)"), default=0, 
+                                               max_digits=12, decimal_places=3 ) #numberUnitsDamaged
+    
     #Reasons
     units_lost_reason = models.ForeignKey( LossDamageType, verbose_name=_("Lost Reason"), 
                                            related_name='lost_reason', #LD_LostReason 
@@ -1104,27 +1139,45 @@ class LoadingDetail(models.Model):
     
     def calculate_net_received_good( self ):
         """Returns weight net for good units"""
-        return ( self.number_units_good * self.unit_weight_net ) / 1000
+        if self.total_weight_net_received:
+            return self.total_weight_net_received
+        else:
+            return ( self.number_units_good * self.unit_weight_net ) / 1000
 
     def calculate_gross_received_good( self ):
         """Returns weight gross for good units"""
-        return ( self.number_units_good * self.unit_weight_gross ) / 1000
+        if self.total_weight_net_received:
+            return self.total_weight_gross_received
+        else:
+            return ( self.number_units_good * self.unit_weight_gross ) / 1000
 
     def calculate_net_received_damaged( self ):
         """Returns weight net for damaged units"""
-        return ( self.number_units_damaged * self.unit_weight_net ) / 1000
+        if self.received_net_damaged:
+            return self.received_net_damaged
+        else:
+            return ( self.number_units_damaged * self.unit_weight_net ) / 1000
 
     def calculate_gross_received_damaged( self ):
         """Returns weight gross for damaged units"""
-        return ( self.number_units_damaged * self.unit_weight_gross ) / 1000
+        if self.received_gross_damaged:
+            return self.received_gross_damaged
+        else:
+            return ( self.number_units_damaged * self.unit_weight_gross ) / 1000
 
     def calculate_net_received_lost( self ):
         """Returns weight net for lost units"""
-        return ( self.number_units_lost * self.unit_weight_net ) / 1000
+        if self.received_net_lost:
+            return self.received_net_lost
+        else:
+            return ( self.number_units_lost * self.unit_weight_gross ) / 1000
 
     def calculate_gross_received_lost( self ):
         """Returns weight gross for good units"""
-        return ( self.number_units_lost * self.unit_weight_gross ) / 1000
+        if self.received_gross_lost:
+            return self.received_gross_lost
+        else:
+            return ( self.number_units_lost * self.unit_weight_gross ) / 1000
     
     def calculate_total_received_units( self ):
         """Returns total count of received units"""
@@ -1133,6 +1186,7 @@ class LoadingDetail(models.Model):
 
     def calculate_total_received_net( self ):
         """Returns total weight net for received units"""
+        
         return ( self.calculate_net_received_good() + self.calculate_net_received_damaged()).quantize(decimal.Decimal('.001'), rounding=decimal.ROUND_HALF_UP)
 
     def calculate_total_received_gross( self ):
@@ -1144,9 +1198,11 @@ class LoadingDetail(models.Model):
     
     def is_received(self):
         """Checks for receipt completion of item"""
-        return self.number_of_units == self.number_units_good + self.number_units_damaged + self.number_units_lost
-    
-    
+        if self.over_offload_units:
+            return self.number_of_units <= self.number_units_good + self.number_units_damaged + self.number_units_lost
+        else:
+            return self.number_of_units == self.number_units_good + self.number_units_damaged + self.number_units_lost 
+                
     def clean(self):
         """Validates LoadingDetail instance."""
         super(LoadingDetail, self).clean()

@@ -193,7 +193,7 @@ def table_waybills(request, queryset=ets.models.Waybill.objects.all(), filtering
         return HttpResponse(simplejson.dumps({'redirect_url': redirect_url}), content_type="application/json; charset=utf-8")
 
     return get_datatables_records(request, queryset, column_index_map, lambda item: [
-        fill_link(item.get_absolute_url(), item.order.pk),
+        fill_link(item.order.get_absolute_url(), item.order.pk),
         fill_link(item.get_absolute_url(), item.pk),
         item.order.warehouse.name,
         item.order.consignee.name,
@@ -210,7 +210,7 @@ def table_waybills(request, queryset=ets.models.Waybill.objects.all(), filtering
         "%s/%s" % (item.sent_compas and "D" or "-", item.receipt_sent_compas and "R" or "-", ),        
         
         fill_link(reverse('waybill_delete', kwargs={'waybill_pk': item.pk}) \
-                  if item.has_dispatch_permission(request.user) else '', 
+                  if item.has_delete_permission(request.user) else '',
                   _("Delete"), "delete_waybill"),
     ])
 
@@ -258,7 +258,7 @@ def table_validate_waybills(request, queryset=ets.models.Waybill.objects.all(), 
         return HttpResponse(simplejson.dumps({'redirect_url': redirect_url}), content_type="application/json; charset=utf-8")
 
     return get_datatables_records(request, queryset, column_index_map, lambda item: [
-        fill_link(item.get_absolute_url(), item.order.pk),
+        fill_link(item.order.get_absolute_url(), item.order.pk),
         fill_link(item.get_absolute_url(), item.pk),
         item.order.warehouse.name,
         item.order.consignee.name,
@@ -266,7 +266,7 @@ def table_validate_waybills(request, queryset=ets.models.Waybill.objects.all(), 
         item.transport_dispach_signed_date and date_filter(item.transport_dispach_signed_date).upper() or _("Pending"),
         item.receipt_signed_date and date_filter(item.receipt_signed_date).upper() or _("Pending"),
         fill_link(reverse(url, kwargs={'waybill_pk': item.pk}), _("Validate"), "validate-link"),
-        fill_link(reverse("waybill_errors", kwargs={'waybill_pk': item.pk, "logger_action": logger_action}), _("Show errors"), "error-link") if item.compass_loggers.exists() else "",
+        fill_link(reverse("waybill_errors", kwargs={'waybill_pk': item.pk, "logger_action": logger_action}), _("Show errors"), "error-link") if item.compass_loggers.filter(action=logger_action).exists() else "",
     ])
     
 @waybill_officer_related
@@ -396,10 +396,11 @@ def waybill_reception(request, waybill_pk, queryset, form_class=WaybillRecieptFo
         'arrival_date': today,
         'start_discharge_date': today,
         'end_discharge_date': today,
+        'receipt_warehouse': waybill.receipt_warehouse or waybill.destination,
     }, instance=waybill)
     
-    form.fields['destination'].queryset = request.user.person.warehouses.all().exclude(pk=waybill.order.warehouse.pk)
-    form.fields['destination'].empty_label = None
+    form.fields['receipt_warehouse'].queryset = request.user.person.warehouses.all().exclude(pk=waybill.order.warehouse.pk)
+    form.fields['receipt_warehouse'].empty_label = None
     
     if form.is_valid() and loading_formset.is_valid():
         waybill = form.save()
@@ -539,7 +540,7 @@ def barcode_qr( request, waybill_pk, queryset=ets.models.Waybill.objects.all() )
     waybill = get_object_or_404(queryset, pk = waybill_pk)
     
     barcode = waybill.barcode_qr()
-    return HttpResponse(barcode.read(), content_type="image/jpeg")
+    return HttpResponse(barcode.read(), content_type="image/gif")
 barcode_qr.authentication = False
 
 

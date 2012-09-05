@@ -130,7 +130,7 @@ class WaybillAdmin(logicaldelete.admin.ModelAdmin):
                                        'container_one_remarks_dispatch', 'container_one_remarks_reciept')}),
         (_('Container 2'), {'fields': ('container_two_number', 'container_two_seal_number', 
                                        'container_two_remarks_dispatch', 'container_two_remarks_reciept')}),
-        (_("Receipt"), {'fields': ('arrival_date', 'start_discharge_date', 
+        (_("Receipt"), {'fields': ('receipt_warehouse', 'arrival_date', 'start_discharge_date', 
                                    'end_discharge_date', 'receipt_signed_date', 
                                    'receipt_person', 'distance', 'receipt_remarks',)}),
         (_("COMPAS"), {'fields': ('validated', 'sent_compas', 'receipt_validated', 'receipt_sent_compas')}),
@@ -142,7 +142,7 @@ class WaybillAdmin(logicaldelete.admin.ModelAdmin):
     readonly_fields = ('order','date_created', 'date_modified')
     date_hierarchy = 'date_created'
     list_filter = ('date_created',)
-    raw_id_fields = ('destination','dispatcher_person',)
+    raw_id_fields = ('destination', 'receipt_warehouse', 'dispatcher_person',)
     search_fields = ('slug', 'order__pk',)
     inlines = (LoadingDetailsInline, CompasLoggerInline)
     
@@ -253,7 +253,7 @@ class CompasAdmin(logicaldelete.admin.ModelAdmin):
         (_('Dates'), {'fields': ('date_created', 'date_modified', 'date_removed',)}),
     )
     actions = None
-    inlines = (ImportLoggerInline, CompasLoggerInline)
+    #inlines = (ImportLoggerInline, CompasLoggerInline)
 
 admin.site.register( ets.models.Compas, CompasAdmin )
 
@@ -361,6 +361,15 @@ class PersonAdmin(UserAdmin):
     
 admin.site.register(ets.models.Person, PersonAdmin)
 
+class ImportLoggerAdmin(admin.ModelAdmin):
+    __metaclass__ = ModelAdminWithForeignKeyLinksMetaclass
+    
+    list_display = ('pk', 'link_to_compas','when_attempted','status','message')
+    search_fields = ('compas__pk',)
+    #raw_id_fields = ('compas',)
+    date_hierarchy = 'when_attempted'
+    list_filter = ('when_attempted', 'status',  'compas')
+
 
 class CompasLoggerAdmin(admin.ModelAdmin):
     __metaclass__ = ModelAdminWithForeignKeyLinksMetaclass
@@ -372,7 +381,7 @@ class CompasLoggerAdmin(admin.ModelAdmin):
     list_filter = ('when_attempted', 'status', 'action', 'compas')
 
 admin.site.register(ets.models.CompasLogger, CompasLoggerAdmin)
-
+admin.site.register( ets.models.ImportLogger, ImportLoggerAdmin)
 
 class LoggedUserAdmin(UserAdmin):
     inlines = UserAdmin.inlines + [PersonInline,]
