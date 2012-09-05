@@ -1018,6 +1018,9 @@ class Waybill( ld_models.Model ):
     
     def has_dispatch_permission(self, user):
         return (not hasattr(user, 'person') or user.person.dispatch) and Waybill.dispatches(user).filter(pk=self.pk).exists()
+
+    def has_delete_permission(self, user):
+        return user.pk == self.dispatcher_person.pk or user.compases.exists()
     
 
 class LoadingDetail(models.Model):

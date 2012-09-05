@@ -85,7 +85,7 @@ def waybill_delete(waybill, user, text=_("Delete"), redirect_to=''):
     return { 
         'text': text,
         'url': "%s?%s" % (reverse('waybill_delete', kwargs={'waybill_pk': waybill.pk}), urlencode({'redirect_to': redirect_to})),
-        'success': waybill.has_dispatch_permission(user),
+        'success': waybill.has_delete_permission(user),
         'dialog_question': _("Are you sure you want to delete this waybill?"),
     }
 
