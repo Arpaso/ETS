@@ -1020,7 +1020,7 @@ class Waybill( ld_models.Model ):
         return (not hasattr(user, 'person') or user.person.dispatch) and Waybill.dispatches(user).filter(pk=self.pk).exists()
 
     def has_delete_permission(self, user):
-        return (user.pk == self.dispatcher_person.pk or user in self.order.warehouse.compas.officers.all()) \
+        return (user.pk == self.dispatcher_person.pk or self.order.warehouse.compas.officers.filter(pk=user.pk).exists()) \
                and not self.transport_dispach_signed_date
     
 
