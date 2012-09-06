@@ -149,7 +149,7 @@ class WaybillTestCase(TestCaseMixin, TestCase):
         }
         
         response = self.client.post(reverse('waybill_create', kwargs={'order_pk': self.order.pk,}), data=data)
-        self.assertContains(response, u'Chose Destination Warehouse or another Transaction Type')
+        self.assertContains(response, u'Choose Destination Warehouse or another Transaction Type')
         self.assertContains(response, u'Overloaded for 10.250 tons')
 
         data.update({
@@ -514,14 +514,13 @@ class WaybillTestCase(TestCaseMixin, TestCase):
             'distance': 5,
             'receipt_remarks': 'test remarks',
             'destination': 'OE7X001',
+            'receipt_warehouse': 'OE7X001',
         }
         
         response = self.client.post(reverse('waybill_reception_scanned', kwargs={'scanned_code': data,}),
                                     data=form_data)
 
-        way = ets.models.Waybill.objects.get(pk=waybill_pk)
         # Everything should be fine
-        self.assertRedirects(response, way.get_absolute_url())
         self.assertEqual(ets.models.Waybill.objects.get(pk=waybill_pk).receipt_remarks, 'test remarks')
         
         data = "-123143"

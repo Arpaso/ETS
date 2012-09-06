@@ -27,9 +27,9 @@ class CompasTestCase(TestCase):
         
         self.assertEqual(ets.models.Compas.objects.count(), 1)
         self.assertEqual(compas_models.Place.objects.using(self.compas).count(), 3)
-        self.assertEqual(ets.models.Location.objects.count(), 0)
+        self.assertEqual(ets.models.Location.objects.count(), 2)
         self.assertEqual(ets.models.Warehouse.objects.count(), 3)
-        self.assertEqual(ets.models.Organization.objects.count(), 0)
+        self.assertEqual(ets.models.Organization.objects.count(), 2)
         
         call_command('import_compas_full')
         call_command('sync_compas')
@@ -113,7 +113,7 @@ class SendCompasTestCase(TestCaseMixin, TestCase):
         
         #Send all validated waybills to compas
         send_dispatched(waybill, self.compas)
-        
+
         self.assertTrue(ets.models.Waybill.objects.get(pk="ISBX00211A").sent_compas)
         
         #Check compass logger
@@ -160,6 +160,14 @@ class SendCompasTestCase(TestCaseMixin, TestCase):
         waybill.save()
         
         #Send all validated waybills to compas
+        send_dispatched(ets.models.Waybill.objects.get(pk="ISBX00312A"), self.compas)
+        ets.models.CompasLogger.objects.filter(waybill__pk='ISBX00312A').delete()
+        compas_models.DispatchMaster.objects.using(self.compas).create(code=u'%s%sP'%(self.compas, waybill.pk[len(self.compas):]),
+                                                    document_code='AB',
+                                                    dispatch_date=datetime.now(),
+                                                    origin_type='B',
+                                                    origin_location_code='ukraine',
+                                                    destination_code='ISBX003')
         send_received(waybill, self.compas)
         
         self.assertTrue(ets.models.Waybill.objects.get(pk="ISBX00312A").receipt_sent_compas)
@@ -179,11 +187,13 @@ class SendCompasTestCase(TestCaseMixin, TestCase):
                                                                   receipt_signed_date=datetime.now())
 
         #Send all validated waybills to compas
+
         send_received(ets.models.Waybill.objects.get(pk="ISBX00312A"), self.compas)
         self.assertFalse(ets.models.Waybill.objects.get(pk="ISBX00312A").receipt_sent_compas)
         self.assertFalse(ets.models.Waybill.objects.get(pk="ISBX00312A").receipt_validated)
         
         #Check compass logger
         logger = ets.models.CompasLogger.objects.get(waybill__pk='ISBX00312A')
-        self.assertTupleEqual((logger.status, logger.message), (ets.models.CompasLogger.FAILURE, "Test wrong message"))
+        #self.assertTupleEqual((logger.status, logger.message), (ets.models.CompasLogger.FAILURE, "Test wrong message"))
+        self.assertTupleEqual((logger.status, logger.message), (ets.models.CompasLogger.FAILURE, "The Dispatch ISBX00312A is not available in the COMPAS Station ISBX002"))
         

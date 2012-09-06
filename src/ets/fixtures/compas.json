@@ -92,6 +92,16 @@
     }
   },
   {
+    "pk": "MIX",
+    "model": "ets.commoditycategory",
+    "fields": {}
+  },
+  {
+    "pk": "SED",
+    "model": "ets.commoditycategory",
+    "fields": {}
+  },
+  {
     "pk": "LMIX", 
     "model": "ets.lossdamagetype", 
     "fields": {
@@ -422,7 +432,7 @@
     }
   },
   {
-    "pk": "ISBX00312A",
+    "pk": "ISBX00312AP",
     "model": "compas.dispatchmaster",
     "fields": {
       "document_code": "AB",

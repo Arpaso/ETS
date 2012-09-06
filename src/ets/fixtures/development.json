@@ -235,6 +235,7 @@
       "transport_driver_licence": "EG234454",
       "container_two_number": "",
       "destination": "ISBX002",
+      "receipt_warehouse": "ISBX002",
       "container_two_seal_number": "",
       "transport_trailer_registration": "",
       "date_removed": null,

@@ -31,5 +31,35 @@
       "organization": "WFP",
       "start_date": "2011-10-17"
     }
+  },
+  {
+    "pk": "ISBX",
+    "model": "ets.location",
+    "fields": {
+      "country": "586",
+      "name": "ISLAMABAD_CAP"
+    }
+  },
+  {
+    "pk": "OE7X",
+    "model": "ets.location",
+    "fields": {
+      "country": "586",
+      "name": "THARPARKAR"
+    }
+  },
+  {
+    "pk": "DOEAF",
+    "model": "ets.organization",
+    "fields": {
+      "name": "First consignee in our system"
+    }
+  },
+  {
+    "pk": "WFP",
+    "model": "ets.organization",
+    "fields": {
+      "name": "World Food Program"
+    }
   }
 ]

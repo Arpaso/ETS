@@ -447,7 +447,6 @@ def send_dispatched(waybill, compas=None, cache_prefix='send_dispatched'):
                 ), compas)
 
     except Exception, err:
-
         message = hasattr(err, 'messages') and u"\n".join(err.messages) or unicode(err)
         for error_message in reduce_compas_errors(message):
             ets_models.CompasLogger.objects.create(action=ets_models.CompasLogger.DISPATCH, 

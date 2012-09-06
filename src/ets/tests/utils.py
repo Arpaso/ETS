@@ -5,7 +5,7 @@ from functools import wraps
 from django.conf import settings
 from django.core.management import call_command
 
-from ets.models import Compas, Order, Warehouse, LossDamageType
+from ets.models import Compas, CommodityCategory
 
 def change_settings(func, **kwargs):
     @wraps(func)
@@ -28,12 +28,14 @@ class TestCaseMixin(object):
     
     #multi_db = True
     compas = 'ISBX002'
-    fixtures = ('db_compas.json', 'groups.json', 'permissions.json')
+    fixtures = ('db_compas.json', 'groups.json', 'permissions.json', 'warehouse.json')
     
     def setUp(self):
         "Hook method for setting up the test fixture before exercising it."
-        call_command('loaddata', 'warehouse.json', verbosity=0, commit=False, check_constraints=False, database='default')
-        call_command('loaddata', 'compas.json', verbosity=0, commit=False, check_constraints=False, database=self.compas)
+        for cat in CommodityCategory.objects.all():
+            print cat.code
+        call_command('loaddata', 'compas.json', verbosity=0, commit=False, database=self.compas)
+        
         station = Compas.objects.get(pk=self.compas)
         station.update(base=True)
         station.update(base=False)
