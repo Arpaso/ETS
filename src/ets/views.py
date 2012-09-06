@@ -210,7 +210,7 @@ def table_waybills(request, queryset=ets.models.Waybill.objects.all(), filtering
         "%s/%s" % (item.sent_compas and "D" or "-", item.receipt_sent_compas and "R" or "-", ),        
         
         fill_link(reverse('waybill_delete', kwargs={'waybill_pk': item.pk}) \
-                  if item.has_dispatch_permission(request.user) else '', 
+                  if item.has_delete_permission(request.user) else '', 
                   _("Delete"), "delete_waybill"),
     ])
 
